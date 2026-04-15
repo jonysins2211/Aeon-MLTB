@@ -1,8 +1,8 @@
 from asyncio import gather, sleep
+from collections import OrderedDict
 from re import match as re_match
 from time import time
 
-from cachetools import TTLCache
 from pyrogram import Client, enums
 from pyrogram.errors import (
     FloodPremiumWait,
@@ -25,6 +25,48 @@ from bot.core.telegram_manager import TgClient
 from bot.helper.ext_utils.bot_utils import SetInterval
 from bot.helper.ext_utils.exceptions import TgLinkException
 from bot.helper.ext_utils.status_utils import get_readable_message
+
+class TTLCache:
+    def __init__(self, maxsize: int, ttl: int):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self._items = OrderedDict()
+
+    def __contains__(self, key):
+        return self._get_item(key) is not None
+
+    def __getitem__(self, key):
+        item = self._get_item(key)
+        if item is None:
+            raise KeyError(key)
+        return item[0]
+
+    def __setitem__(self, key, value):
+        expiry = time() + self.ttl
+        self._items[key] = (value, expiry)
+        self._items.move_to_end(key)
+        self._evict()
+
+    def _get_item(self, key):
+        item = self._items.get(key)
+        if item is None:
+            return None
+        value, expiry = item
+        if expiry <= time():
+            self._items.pop(key, None)
+            return None
+        self._items.move_to_end(key)
+        return value, expiry
+
+    def _evict(self):
+        now = time()
+        for key, (_, expiry) in list(self._items.items()):
+            if expiry <= now:
+                self._items.pop(key, None)
+
+        while len(self._items) > self.maxsize:
+            self._items.popitem(last=False)
+
 
 session_cache = TTLCache(maxsize=1000, ttl=36000)
 
