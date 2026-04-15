@@ -36,4 +36,4 @@ uvicorn
 uvloop
 xattr
 yt-dlp[default,curl-cffi]
-cachetools
+cachetools==5.3.3
